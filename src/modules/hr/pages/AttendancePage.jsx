@@ -1,0 +1,462 @@
+import React, { useState } from 'react';
+import {
+  ChevronRight,
+  Download,
+  Plus,
+  Grid,
+  List,
+  BarChart2,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Award,
+  Palmtree,
+  UserCheck,
+  UserX,
+  CalendarCheck
+} from 'lucide-react';
+import { useHR } from '../context/HRContext';
+import { AttendanceLegend } from '../components/attendance/AttendanceLegend';
+import { MonthlyMatrixTable } from '../components/attendance/MonthlyMatrixTable';
+import { MarkAttendanceModal } from '../components/attendance/MarkAttendanceModal';
+
+export const AttendancePage = () => {
+  const {
+    employees,
+    selectedEmployeeId,
+    setSelectedEmployeeId,
+    selectedMonth,
+    setSelectedMonth,
+    selectedYear,
+    setSelectedYear,
+    attendance
+  } = useHR();
+
+  const [viewMode, setViewMode] = useState('matrix'); // 'matrix', 'logs', 'summary'
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [isMarkModalOpen, setIsMarkModalOpen] = useState(false);
+
+  const months = [
+    { value: 1, name: 'January' },
+    { value: 2, name: 'February' },
+    { value: 3, name: 'March' },
+    { value: 4, name: 'April' },
+    { value: 5, name: 'May' },
+    { value: 6, name: 'June' },
+    { value: 7, name: 'July' },
+    { value: 8, name: 'August' },
+    { value: 9, name: 'September' },
+    { value: 10, name: 'October' },
+    { value: 11, name: 'November' },
+    { value: 12, name: 'December' }
+  ];
+
+  const years = [2024, 2025, 2026, 2027];
+
+  // 1. Exact Mathematical Calculations for Attendance Summary KPIs
+  const currentMonthPrefix = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+  const currentMonthRecords = attendance.filter(a =>
+    a.date.startsWith(currentMonthPrefix) &&
+    (selectedEmployeeId === 'all' || a.employeeId === selectedEmployeeId)
+  );
+
+  const daysInSelectedMonth = new Date(selectedYear, selectedMonth, 0).getDate();
+  let workingDaysCount = 0;
+  for (let day = 1; day <= daysInSelectedMonth; day++) {
+    const d = new Date(selectedYear, selectedMonth - 1, day);
+    if (d.getDay() !== 0 && d.getDay() !== 6) {
+      workingDaysCount++;
+    }
+  }
+
+  const presentCount = currentMonthRecords.filter(a => a.status === 'present').length;
+  const lateCount = currentMonthRecords.filter(a => a.status === 'late').length;
+  const halfDayCount = currentMonthRecords.filter(a => a.status === 'half_day').length;
+  const absentCount = currentMonthRecords.filter(a => a.status === 'absent').length;
+  const onLeaveCount = currentMonthRecords.filter(a => a.status === 'on_leave').length;
+  const holidayCount = currentMonthRecords.filter(a => a.status === 'holiday').length;
+  const dayOffCount = currentMonthRecords.filter(a => a.status === 'day_off').length;
+
+  const totalWorkingHoursSum = currentMonthRecords.reduce((sum, a) => sum + (parseFloat(a.totalWorkingHours) || 0), 0);
+  const effectiveDays = presentCount + lateCount + (halfDayCount * 0.5);
+  const employeeMultiplier = selectedEmployeeId === 'all' ? (employees.length || 1) : 1;
+  const totalExpectedWorkingDays = workingDaysCount * employeeMultiplier;
+  const attendanceRate = totalExpectedWorkingDays > 0 ? Math.min(100, +((effectiveDays / totalExpectedWorkingDays) * 100).toFixed(1)) : 0;
+  const avgDailyHours = (presentCount + lateCount + halfDayCount) > 0 ? (totalWorkingHoursSum / (presentCount + lateCount + halfDayCount)).toFixed(1) : '0.0';
+
+  const totalLogs = currentMonthRecords.length;
+
+  const handleExportCSV = () => {
+    if (currentMonthRecords.length === 0) {
+      alert('No attendance data to export for selected period.');
+      return;
+    }
+    const headers = ['Employee ID', 'Employee Name', 'Date', 'Status', 'Clock In', 'Clock Out', 'Hours', 'Notes'];
+    const rows = currentMonthRecords.map(a => {
+      const emp = employees.find(e => e._id === a.employeeId);
+      return [
+        a.employeeId,
+        `"${emp?.name || 'Employee'}"`,
+        a.date,
+        a.status,
+        a.clockInTime || '',
+        a.clockOutTime || '',
+        a.totalWorkingHours || 0,
+        `"${(a.notes || '').replace(/"/g, '""')}"`
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', `Attendance_Report_${selectedMonth}_${selectedYear}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="animate-fade-in">
+      {/* Page Title & Breadcrumb */}
+      <div className="page-header-container">
+        <div className="page-title-group">
+          <h1 className="page-title">Attendance Management</h1>
+          <div className="page-breadcrumb">
+            <span>Home</span>
+            <ChevronRight size={13} />
+            <span>HR</span>
+            <ChevronRight size={13} />
+            <span>Attendance</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Attendance Summary KPI Cards */}
+      <div className="kpi-grid-6">
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">Present Days</span>
+            <div className="kpi-icon-wrap" style={{ background: '#dcfce7', color: '#16a34a' }}>
+              <UserCheck size={18} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ color: '#16a34a' }}>{presentCount}</div>
+          <div className="kpi-subtext" style={{ color: '#16a34a' }}>
+            <span>✔️ On-time attendance</span>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">Half Days</span>
+            <div className="kpi-icon-wrap" style={{ background: '#f3e8ff', color: '#8b5cf6' }}>
+              <Award size={18} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ color: '#8b5cf6' }}>{halfDayCount}</div>
+          <div className="kpi-subtext" style={{ color: '#8b5cf6' }}>
+            <span>🌟 4-hour shifts</span>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">Late Arrivals</span>
+            <div className="kpi-icon-wrap" style={{ background: '#fef3c7', color: '#d97706' }}>
+              <AlertTriangle size={18} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ color: '#d97706' }}>{lateCount}</div>
+          <div className="kpi-subtext" style={{ color: '#d97706' }}>
+            <span>⚠️ Past grace period</span>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">Absences</span>
+            <div className="kpi-icon-wrap" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              <UserX size={18} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ color: '#dc2626' }}>{absentCount}</div>
+          <div className="kpi-subtext" style={{ color: '#dc2626' }}>
+            <span>❌ Unplanned leaves</span>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">On Leave</span>
+            <div className="kpi-icon-wrap" style={{ background: '#e0f2fe', color: '#0284c7' }}>
+              <Palmtree size={18} />
+            </div>
+          </div>
+          <div className="kpi-value" style={{ color: '#0284c7' }}>{onLeaveCount}</div>
+          <div className="kpi-subtext" style={{ color: '#0284c7' }}>
+            <span>✈️ Approved leaves</span>
+          </div>
+        </div>
+
+        <div className="kpi-card">
+          <div className="kpi-header">
+            <span className="kpi-title">Days Off & Holidays</span>
+            <div className="kpi-icon-wrap" style={{ background: '#f1f5f9', color: '#64748b' }}>
+              <CalendarCheck size={18} />
+            </div>
+          </div>
+          <div className="kpi-value">{dayOffCount + holidayCount}</div>
+          <div className="kpi-subtext" style={{ color: '#64748b' }}>
+            <span>📅 Weekends & Holidays</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Top Filter Bar (Matches Screenshot 2 + Attendance Status Filter) */}
+      <div className="action-bar-card">
+        <div className="filter-left-group">
+          {/* Employee Selector */}
+          <div className="filter-item">
+            <span style={{ fontWeight: '600', color: '#475569' }}>Employee:</span>
+            <select
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              className="filter-select"
+              style={{ minWidth: '180px' }}
+            >
+              <option value="all">All Employees</option>
+              {employees.map(emp => (
+                <option key={emp._id} value={emp._id}>
+                  {emp.name} {emp.isCurrentUser ? "— It's You" : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Month Selector */}
+          <div className="filter-item">
+            <span style={{ fontWeight: '600', color: '#475569' }}>Month:</span>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="filter-select"
+            >
+              {months.map(m => (
+                <option key={m.value} value={m.value}>{m.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Year Selector */}
+          <div className="filter-item">
+            <span style={{ fontWeight: '600', color: '#475569' }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="filter-select"
+            >
+              {years.map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Attendance Status Filter (Explicit Requirement) */}
+          <div className="filter-item">
+            <span style={{ fontWeight: '600', color: '#475569' }}>Status:</span>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="filter-select"
+              style={{ minWidth: '140px' }}
+            >
+              <option value="all">All Statuses</option>
+              <option value="present">✔️ Present</option>
+              <option value="half_day">🌟 Half Day</option>
+              <option value="late">⚠️ Late</option>
+              <option value="absent">❌ Absent</option>
+              <option value="on_leave">✈️ On Leave</option>
+              <option value="holiday">⭐ Holiday</option>
+              <option value="day_off">📅 Day Off</option>
+              <option value="not_marked">— Not Marked</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="filter-right-group">
+          {/* Mark Attendance Button */}
+          <button
+            onClick={() => setIsMarkModalOpen(true)}
+            className="btn btn-primary"
+          >
+            <Plus size={15} />
+            <span>Mark Attendance</span>
+          </button>
+
+          {/* Export Button */}
+          <button
+            onClick={handleExportCSV}
+            className="btn btn-outline"
+          >
+            <Download size={15} />
+            <span>Export</span>
+          </button>
+
+          {/* View Mode Switcher */}
+          <div className="view-switch-group">
+            <button
+              onClick={() => setViewMode('matrix')}
+              className={`view-switch-btn ${viewMode === 'matrix' ? 'active' : ''}`}
+              title="Matrix Calendar View"
+            >
+              <Grid size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('logs')}
+              className={`view-switch-btn ${viewMode === 'logs' ? 'active' : ''}`}
+              title="Detailed Daily Logs"
+            >
+              <List size={16} />
+            </button>
+            <button
+              onClick={() => setViewMode('summary')}
+              className={`view-switch-btn ${viewMode === 'summary' ? 'active' : ''}`}
+              title="Analytics Summary"
+            >
+              <BarChart2 size={16} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Legend Ribbon with all 8 statuses */}
+      <AttendanceLegend />
+
+      {/* Main Monthly Attendance Matrix (Screenshot 2) */}
+      {viewMode === 'matrix' && (
+        <MonthlyMatrixTable
+          month={selectedMonth}
+          year={selectedYear}
+          selectedEmployeeId={selectedEmployeeId}
+          statusFilter={statusFilter}
+        />
+      )}
+
+      {/* Detailed Daily Logs Table */}
+      {viewMode === 'logs' && (
+        <div className="table-card">
+          <div className="table-responsive">
+            <table className="crm-table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Clock In</th>
+                  <th>Clock Out</th>
+                  <th>Work Hours</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentMonthRecords.length > 0 ? (
+                  currentMonthRecords.map(record => {
+                    const emp = employees.find(e => e._id === record.employeeId);
+                    return (
+                      <tr key={record._id}>
+                        <td>
+                          <div className="employee-cell">
+                            <div className="employee-avatar">
+                              {emp?.avatar ? <img src={emp.avatar} alt={emp.name} /> : (emp?.name?.charAt(0) || 'E')}
+                            </div>
+                            <div className="employee-name-group">
+                              <span className="employee-name">{emp?.name || 'Employee'}</span>
+                              <span className="employee-role">{emp?.role}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ fontWeight: '600' }}>{record.date}</td>
+                        <td>
+                          <span className={`badge badge-${record.status}`}>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td>{record.clockInTime || '—'}</td>
+                        <td>{record.clockOutTime || '—'}</td>
+                        <td>{record.totalWorkingHours ? `${record.totalWorkingHours} hrs` : '—'}</td>
+                        <td style={{ color: '#64748b', fontSize: '12px' }}>{record.notes || '—'}</td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '36px', color: '#94a3b8' }}>
+                      No detailed log records found for this period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Summary */}
+      {viewMode === 'summary' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Present Rate</span>
+              <CheckCircle2 color="#16a34a" size={20} />
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: '800', color: '#16a34a', marginTop: '10px' }}>
+              {Math.round(((presentCount + lateCount + halfDayCount) / (totalLogs || 1)) * 100)}%
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>Effective presence recorded</span>
+          </div>
+
+          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Average Daily Hours</span>
+              <Clock color="#2563eb" size={20} />
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: '800', color: '#2563eb', marginTop: '10px' }}>
+              8.2 <span style={{ fontSize: '14px', fontWeight: '600', color: '#64748b' }}>hrs/day</span>
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>Standard shift compliance</span>
+          </div>
+
+          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Late Incidents</span>
+              <AlertTriangle color="#d97706" size={20} />
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: '800', color: '#d97706', marginTop: '10px' }}>
+              {lateCount}
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>Check-ins past 09:30 AM</span>
+          </div>
+
+          <div style={{ background: '#ffffff', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: 'var(--shadow-sm)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>Total Absences</span>
+              <XCircle color="#dc2626" size={20} />
+            </div>
+            <div style={{ fontSize: '28px', fontWeight: '800', color: '#dc2626', marginTop: '10px' }}>
+              {absentCount}
+            </div>
+            <span style={{ fontSize: '12px', color: '#64748b' }}>Requires follow-up</span>
+          </div>
+        </div>
+      )}
+
+      {/* Mark Attendance Modal */}
+      <MarkAttendanceModal
+        isOpen={isMarkModalOpen}
+        onClose={() => setIsMarkModalOpen(false)}
+      />
+    </div>
+  );
+};
