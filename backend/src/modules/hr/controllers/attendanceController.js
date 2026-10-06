@@ -77,6 +77,34 @@ const markAttendance = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, data: record });
 });
 
+// ─── GET /api/attendance/daily ───────────────────────────────────────────────
+const getAttendanceByDate = asyncHandler(async (req, res) => {
+  const { date } = req.query;
+  const targetDate = date || new Date().toISOString().split('T')[0];
+
+  const records = await Attendance.find({ date: targetDate }).sort({ employeeName: 1 });
+  res.json({ success: true, count: records.length, date: targetDate, data: records });
+});
+
+// ─── POST /api/attendance/bulk ───────────────────────────────────────────────
+const bulkMarkAttendance = asyncHandler(async (req, res) => {
+  const { records } = req.body;
+  if (!records || !Array.isArray(records)) {
+    return res.status(400).json({ success: false, message: 'records array is required' });
+  }
+
+  const operations = records.map(r => ({
+    updateOne: {
+      filter: { employee: r.employee, date: r.date },
+      update: { $set: r },
+      upsert: true
+    }
+  }));
+
+  const result = await Attendance.bulkWrite(operations);
+  res.status(200).json({ success: true, message: 'Bulk attendance recorded', data: result });
+});
+
 // ─── DELETE /api/attendance/:id ───────────────────────────────────────────────
 const deleteAttendanceRecord = asyncHandler(async (req, res) => {
   const record = await Attendance.findByIdAndDelete(req.params.id);
@@ -84,5 +112,13 @@ const deleteAttendanceRecord = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Record deleted', data: {} });
 });
 
-module.exports = { getMonthlyAttendance, getAttendanceSummary, markAttendance, deleteAttendanceRecord };
+module.exports = {
+  getMonthlyAttendance,
+  getAttendanceSummary,
+  getAttendanceByDate,
+  markAttendance,
+  bulkMarkAttendance,
+  deleteAttendance: deleteAttendanceRecord,
+  deleteAttendanceRecord
+};
 

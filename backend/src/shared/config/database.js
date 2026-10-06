@@ -12,7 +12,7 @@ const connectDB = async () => {
 
     isConnected = true;
 
-    console.log(`\n🍃 MongoDB Connected: ${conn.connection.host}`);
+    console.log(`\n🍃 MongoDB Atlas Cloud Connected successfully!`);
     console.log(`   Database: ${conn.connection.name}\n`);
 
     // Graceful shutdown
